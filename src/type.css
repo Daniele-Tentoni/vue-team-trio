@@ -1,0 +1,7 @@
+@font-face {
+    font-family: 'Trio Display';
+    src: local('Palatino Linotype'), local('Book Antiqua'), local('Palatino');
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+}

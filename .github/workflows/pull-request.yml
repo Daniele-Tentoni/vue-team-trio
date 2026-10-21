@@ -1,0 +1,57 @@
+name: Pull Request Tests
+
+on:
+    pull_request:
+        branches: [main]
+
+permissions:
+    contents: read
+
+concurrency:
+    group: pr-tests-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    test:
+        name: Unit and Browser Tests
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set Up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '24'
+                  cache: npm
+
+            - name: Install Dependencies
+              run: npm ci
+
+            - name: Run Unit Tests with V8 Coverage
+              run: npm run test:coverage
+
+            - name: Upload Unit Coverage
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: unit-coverage-${{ github.event.pull_request.number }}
+                  path: coverage/
+                  if-no-files-found: ignore
+                  retention-days: 7
+
+            - name: Install Chromium and Firefox
+              run: npx playwright install --with-deps chromium firefox
+
+            - name: Typecheck, Build and Run Chromium and Firefox Tests
+              run: npm run test:e2e
+
+            - name: Upload Failure Evidence
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-failure-${{ github.event.pull_request.number }}
+                  path: test-results/
+                  if-no-files-found: ignore
+                  retention-days: 7
