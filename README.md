@@ -12,7 +12,7 @@ Vuetify, stili e icone Lucide sono inclusi nel bundle: non vengono caricati font
 
 - `src/stores/team.ts`: store Pinia condiviso dalle pagine e dai pannelli. Gestisce team, posti, liste, verifica asincrona, conflitti, tooltip, retry, aggiornamento forzato, export, reset e notifiche. Attende 400 ms dopo una modifica della lista e verifica solo i nomi unici. Risposte di verifiche superate da nuove modifiche non ripristinano esiti obsoleti.
 - `src/domain.ts`: funzioni pure del dominio richiamate dallo store (parsing, legalita, conflitti e generazione del testo), riutilizzate dai test. Non contiene rete, stato globale o accessi al browser.
-- `src/services/ScryfallService.ts`: unica classe di accesso esterno. Effettua esclusivamente GET a `https://api.scryfall.com/cards/named?exact=...`, con un solo nome per richiesta, niente body, credenziali o referrer e nessun redirect. Deduplica le richieste concorrenti e le serializza con almeno 100 ms tra gli inizi. Timeout di 15 secondi; errori di rete e rate limit non sono risultati di illegalita e non vengono memorizzati nella cache.
+- `src/services/ScryfallService.ts`: unica classe di accesso esterno. Effettua esclusivamente GET a `https://api.scryfall.com/cards/named?exact=...`, con un solo nome per richiesta, niente body, credenziali o referrer e nessun redirect. Deduplica le richieste concorrenti e le serializza con almeno **250 ms** tra gli inizi (massimo circa 4 richieste al secondo per istanza). Timeout di 15 secondi; su 429 o errori di rete/CORS opachi applica fino a due retry con backoff, rispettando `Retry-After` se leggibile. Errori e rate limit non sono risultati di illegalita e non vengono memorizzati nella cache.
 - `src/services/CardLegalityCache.ts`: cache in memoria e localStorage delle sole informazioni pubbliche per carta, con validazione dei record, scadenza e limite di 1.000 chiavi. Se localStorage non e disponibile, resta attiva la cache in memoria.
 - `src/services/PublicDataService.ts`: legge soltanto i crediti dell'illustrazione da un URL fisso della stessa origine. Non riceve informazioni sui team.
 - `src/services/FileDownloadService.ts`: download locale tramite Blob, senza rete. Lo store controlla che le liste e i nomi siano completi prima di invocarlo.
@@ -110,6 +110,14 @@ Non esistono piu cataloghi bulk, snapshot inclusi nella build o script di aggior
 - Senza rete sono riutilizzabili solo le carte gia presenti in cache e non scadute. Un errore HTTP/429 o un timeout non sono mai memorizzati come illegalita.
 
 Una cache e informazioni sempre in tempo reale sono obiettivi diversi: la soglia giornaliera copre gli annunci usuali delle 19:00 CET e quelli di emergenza nello stesso orario, ma non garantisce che Scryfall sia gia aggiornato dopo cinque minuti, ne intercetta immediatamente annunci pubblicati in altri orari. Prima di un torneo usare Aggiorna legalità per ottenere le risposte correnti. La cache non e una certificazione della banlist in tempo reale.
+
+### Errori 429 e CORS su GitHub Pages
+
+HTTP **429** indica che Scryfall sta rifiutando richieste per eccesso di frequenza. Se la risposta di rifiuto non include `Access-Control-Allow-Origin`, il browser segnala anche un errore CORS: JavaScript vede soltanto un fallimento di rete e non puo leggere ne il codice 429 ne `Retry-After`. Non e un errore del base URL Pages e non si risolve aggiungendo header CORS alla richiesta, usando `no-cors` o un proxy.
+
+Il servizio usa un ritmo prudente e al massimo **tre tentativi complessivi**: attese iniziali di 2 e 4 secondi, estese se `Retry-After` indica un intervallo maggiore (in secondi o come data HTTP). Se anche l'ultimo tentativo fallisce, sospende le ulteriori richieste della coda per almeno altri 8 secondi, o per il tempo indicato dal server. Durante questa pausa i dati di cache recenti sono ancora riutilizzabili, ma le carte non verificabili bloccano l'export. Dopo l'attesa usare Riprova; evitare aggiornamenti forzati ripetuti e altre schede che eseguono ricerche contemporaneamente. Un limite applicato all'IP, anche condiviso con altri utenti, puo durare piu del cooldown locale: l'app non puo rimuoverlo.
+
+Timeout e risposte non valide restano errori, non carte illegali. Nessuna lista completa viene inviata e non sono stati introdotti altri servizi esterni. Gli errori CORS opachi possono anche dipendere dalla rete: i retry sono limitati proprio per non insistere su un servizio irraggiungibile.
 
 ## Distribuzione
 
