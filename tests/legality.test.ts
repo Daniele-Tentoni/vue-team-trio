@@ -1,4 +1,4 @@
-import { test, vi } from 'vitest'
+import { afterEach, test, vi } from 'vitest'
 import assert from 'node:assert/strict'
 import {
     CardLegalityCache,
@@ -7,6 +7,10 @@ import {
     LEGALITY_TTL,
 } from '../src/services/CardLegalityCache.ts'
 import { ScryfallService } from '../src/services/ScryfallService.ts'
+
+afterEach(() => {
+    vi.useRealTimers()
+})
 
 function memoryStorage(): Storage {
     const entries = new Map<string, string>()
@@ -128,7 +132,8 @@ test('Scryfall receives one exact card per GET, no list, cookies or referrer; re
     assert.equal(requests.length, 2)
 })
 
-test('network errors and rate limits are not cached as illegal cards', async () => {
+test('rate limits are retried with a delay and are not cached as illegal cards', async () => {
+    vi.useFakeTimers()
     let attempts = 0
     vi.stubGlobal('fetch', async () => {
         attempts++
@@ -137,9 +142,121 @@ test('network errors and rate limits are not cached as illegal cards', async () 
             : Response.json({ name: 'Forest', legalities: { pauper: 'legal' } })
     })
     const service = new ScryfallService(new CardLegalityCache(null), 0)
-    await assert.rejects(service.lookup('Forest'), /429/)
+    const result = service.lookup('Forest')
+    await vi.advanceTimersByTimeAsync(1999)
+    assert.equal(attempts, 1)
+    await vi.advanceTimersByTimeAsync(1)
+    assert.equal((await result).legal, true)
     assert.equal((await service.lookup('Forest')).legal, true)
     assert.equal(attempts, 2)
+})
+
+test('HTTP Retry-After is respected before retrying and before the next queued card', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+    const times: number[] = []
+    vi.stubGlobal('fetch', async (url: string) => {
+        times.push(Date.now())
+        return times.length === 1
+            ? new Response(null, { status: 429, headers: { 'Retry-After': '5' } })
+            : Response.json({
+                  name: new URL(url).searchParams.get('exact'),
+                  legalities: { pauper: 'legal' },
+              })
+    })
+    const service = new ScryfallService(new CardLegalityCache(null))
+    const results = Promise.all([service.lookup('Forest'), service.lookup('Island')])
+    await vi.advanceTimersByTimeAsync(4999)
+    assert.equal(times.length, 1)
+    await vi.advanceTimersByTimeAsync(1)
+    assert.equal(times.length, 2)
+    await vi.advanceTimersByTimeAsync(250)
+    await results
+    assert.equal(times[1] - times[0], 5000)
+    assert.equal(times[2] - times[1], 250)
+})
+
+test('a CORS-hidden rate limit retries as a network failure without proxies or opaque responses', async () => {
+    vi.useFakeTimers()
+    let attempts = 0
+    vi.stubGlobal('fetch', async (url: string, options: RequestInit) => {
+        attempts++
+        assert.equal(new URL(url).origin, 'https://api.scryfall.com')
+        assert.equal(options.mode, undefined)
+        if (attempts === 1) throw new TypeError('Failed to fetch')
+        return Response.json({ name: 'Searing Blaze', legalities: { pauper: 'legal' } })
+    })
+    const service = new ScryfallService(new CardLegalityCache(null), 0)
+    const result = service.lookup('Searing Blaze')
+    await vi.advanceTimersByTimeAsync(2000)
+    assert.equal((await result).legal, true)
+    assert.equal(attempts, 2)
+})
+
+for (const failure of ['429', 'cors'] as const) {
+    test(`persistent ${failure} failures pause all queued cards and allow recovery after the cooldown`, async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+        let available = false
+        const fetchMock = vi.fn(async () => {
+            if (available) return Response.json({ name: 'Forest', legalities: { pauper: 'legal' } })
+            if (failure === 'cors') throw new TypeError('Failed to fetch')
+            return new Response(null, { status: 429 })
+        })
+        vi.stubGlobal('fetch', fetchMock)
+        const cache = new CardLegalityCache(null)
+        const service = new ScryfallService(cache, 0)
+        const results = Promise.allSettled([
+            service.lookup('Forest'),
+            service.lookup('Island'),
+            service.lookup('Mountain'),
+        ])
+        await vi.advanceTimersByTimeAsync(6000)
+        const settled = await results
+        assert.ok(settled.every((result) => result.status === 'rejected'))
+        assert.equal(fetchMock.mock.calls.length, 3)
+        assert.equal(cache.get('Forest'), undefined)
+        await assert.rejects(service.lookup('Forest'), /paused/)
+        assert.equal(fetchMock.mock.calls.length, 3)
+        available = true
+        await vi.advanceTimersByTimeAsync(8000)
+        assert.equal((await service.lookup('Forest')).legal, true)
+        assert.equal(fetchMock.mock.calls.length, 4)
+    })
+}
+
+test('Retry-After HTTP dates delay retries until the specified time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+    let attempts = 0
+    vi.stubGlobal('fetch', async () => {
+        attempts++
+        return attempts === 1
+            ? new Response(null, {
+                  status: 429,
+                  headers: { 'Retry-After': 'Thu, 22 Oct 2026 12:00:10 GMT' },
+              })
+            : Response.json({ name: 'Forest', legalities: { pauper: 'legal' } })
+    })
+    const service = new ScryfallService(new CardLegalityCache(null), 0)
+    const result = service.lookup('Forest')
+    await vi.advanceTimersByTimeAsync(9999)
+    assert.equal(attempts, 1)
+    await vi.advanceTimersByTimeAsync(1)
+    assert.equal((await result).legal, true)
+    assert.equal(attempts, 2)
+})
+
+test('timeouts propagate without being cached as illegal cards or retried as CORS failures', async () => {
+    const fetchMock = vi.fn(async () => {
+        throw new DOMException('Timed out', 'TimeoutError')
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const cache = new CardLegalityCache(null)
+    const service = new ScryfallService(cache, 0)
+    await assert.rejects(service.lookup('Forest'), { name: 'TimeoutError' })
+    assert.equal(fetchMock.mock.calls.length, 1)
+    assert.equal(cache.get('Forest'), undefined)
 })
 
 test('not found and illegal cards are cached distinctly from network failures', async () => {
