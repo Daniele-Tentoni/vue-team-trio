@@ -157,23 +157,28 @@ test('HTTP Retry-After is respected before retrying and before the next queued c
     const times: number[] = []
     vi.stubGlobal('fetch', async (url: string) => {
         times.push(Date.now())
-        return times.length === 1
-            ? new Response(null, { status: 429, headers: { 'Retry-After': '5' } })
-            : Response.json({
-                  name: new URL(url).searchParams.get('exact'),
-                  legalities: { pauper: 'legal' },
-              })
+        return Promise.resolve(
+            times.length === 1
+                ? new Response(null, { status: 429, headers: { 'Retry-After': '2' } })
+                : Response.json({
+                      name: new URL(url).searchParams.get('exact'),
+                      legalities: { pauper: 'legal' },
+                  })
+        )
     })
     const service = new ScryfallService(new CardLegalityCache(null))
     const results = Promise.all([service.lookup('Forest'), service.lookup('Island')])
-    await vi.advanceTimersByTimeAsync(4999)
+    await vi.advanceTimersByTimeAsync(1999)
     assert.equal(times.length, 1)
     await vi.advanceTimersByTimeAsync(1)
     assert.equal(times.length, 2)
-    await vi.advanceTimersByTimeAsync(250)
+    await vi.advanceTimersByTimeAsync(499)
+    assert.equal(times.length, 2)
+    await vi.advanceTimersByTimeAsync(1)
     await results
-    assert.equal(times[1] - times[0], 5000)
-    assert.equal(times[2] - times[1], 250)
+    assert.equal(times.length, 3)
+    assert.equal(times[1] - times[0], 2000)
+    assert.equal(times[2] - times[1], 500)
 })
 
 test('a CORS-hidden rate limit retries as a network failure without proxies or opaque responses', async () => {
