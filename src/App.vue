@@ -340,19 +340,19 @@
             <ShieldCheck :size="30" class="modal-symbol" />
             <h2 id="privacy-title">Le tue liste restano tue.</h2>
             <p>
-                Liste, quantita, nomi dei giocatori, team e link Moxfield restano nella memoria del
+                Liste, quantità, nomi dei giocatori, team e link Moxfield restano nella memoria del
                 browser. Nessun account, analytics o invio di mazzi completi. Ricaricando la pagina,
                 i dati del team vengono persi.
             </p>
             <h3>Solo Scryfall, una carta alla volta</h3>
             <p>
-                L'unico servizio esterno contattato e api.scryfall.com: ogni richiesta GET contiene
-                soltanto il nome di una carta. Non vengono inviati mazzi, quantita, sideboard, nomi
+                L'unico servizio esterno contattato è api.scryfall.com: ogni richiesta GET contiene
+                soltanto il nome di una carta. Non vengono inviati mazzi, quantità, sideboard, nomi
                 o seating. Le richieste non includono credenziali ne referrer.
             </p>
-            <h3>Cache locale della legalita</h3>
+            <h3>Cache locale della legalità</h3>
             <p>
-                Solo nome, legalita e data di controllo della singola carta vengono conservati
+                Solo nome, legalità e data di controllo della singola carta vengono conservati
                 localmente, fino a 24 ore (un'ora per nomi non trovati), senza associazioni al team.
                 Nessun catalogo globale viene scaricato.
             </p>
@@ -366,13 +366,13 @@
             <p>Se Scryfall non risponde e manca un dato recente, l'esportazione resta bloccata.</p>
             <h3>Link Moxfield</h3>
             <p>
-                Moxfield non viene contattato: il link e riconosciuto localmente. Incolla l'export
+                Moxfield non viene contattato: il link è riconosciuto localmente. Incolla l'export
                 testuale nel pannello.
             </p>
             <h3>Regolamento V1</h3>
             <p>
                 Almeno 60 carte nel main, al massimo 15 in sideboard, tutte legali in Pauper.
-                Nessuna carta puo comparire in piu giocatori, incluse terre base e sideboard. Usa i
+                Nessuna carta può comparire in più giocatori, incluse terre base e sideboard. Usa i
                 nomi inglesi delle carte. La verifica applica queste tre regole, non limiti
                 aggiuntivi di copie per mazzo.
             </p>
@@ -386,7 +386,7 @@
         <dialog ref="resetDialog" class="modal reset-modal" aria-labelledby="reset-title">
             <h2 id="reset-title">Ricominciare la verifica?</h2>
             <p>
-                I nomi, le liste e i link del team verranno rimossi. Questa operazione non puo
+                I nomi, le liste e i link del team verranno rimossi. Questa operazione non può
                 essere annullata.
             </p>
             <div class="modal-actions">
