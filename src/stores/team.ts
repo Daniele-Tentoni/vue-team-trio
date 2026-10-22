@@ -141,9 +141,9 @@ export const useTeamStore = defineStore('team', () => {
     )
     const verificationTitle = computed(() =>
         result.value.valid
-            ? 'Il team e pronto per il torneo.'
+            ? 'Il team è pronto per il torneo.'
             : loadedCount.value === 0
-              ? 'Il prossimo passo e del tuo team.'
+              ? 'Il prossimo passo è del tuo team.'
               : 'Una squadra, nessuna sovrapposizione.'
     )
     const verificationMessage = computed(() => {
@@ -161,19 +161,19 @@ export const useTeamStore = defineStore('team', () => {
                 .map((player) => player.seat)
                 .join(
                     ', '
-                )}. L'esportazione sara disponibile quando tutti i mazzi saranno conformi.`
+                )}. L'esportazione sarà disponibile quando tutti i mazzi saranno conformi.`
         return 'Risolvi gli avvisi nelle liste. Ogni carta deve appartenere a un solo giocatore del team.'
     })
 
     function cardTitle(card: DeckCard): string {
         const messages: string[] = []
         if (failed.value.has(card.key))
-            messages.push('Legalita non verificabile: Scryfall non disponibile. Riprova.')
+            messages.push('Legalità non verificabile: Scryfall non disponibile. Riprova.')
         else if (pending.value.has(card.key) || !cardIndex.value.has(card.key))
-            messages.push('Verifica della legalita in corso su Scryfall.')
+            messages.push('Verifica della legalità in corso su Scryfall.')
         else if (!card.known)
             messages.push('Carta non trovata. Verifica il nome inglese e la sintassi.')
-        else if (!card.legal) messages.push('Questa carta non e legale in Pauper secondo Scryfall.')
+        else if (!card.legal) messages.push('Questa carta non è legale in Pauper secondo Scryfall.')
         const conflict = conflictMap.value.get(card.key)
         if (conflict)
             messages.push(
