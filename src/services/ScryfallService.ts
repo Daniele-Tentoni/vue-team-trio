@@ -10,7 +10,7 @@ export class ScryfallService {
 
     constructor(
         private readonly cache = new CardLegalityCache(),
-        private readonly intervalMs = 250,
+        private readonly intervalMs = 500,
         private readonly retryDelayMs = 2000,
         private readonly maxRetries = 2
     ) {}
